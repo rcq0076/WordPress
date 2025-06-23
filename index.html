@@ -8,7 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* 样式保持不变 */
         :root {
             --primary: #2c3e50;
             --secondary: #3498db;
@@ -594,6 +593,7 @@
             display: flex;
             gap: 15px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
         
         .data-file-input {
@@ -849,6 +849,82 @@
             transition: opacity 0.3s;
         }
         
+        /* 新增管理员二维码区域样式 */
+        .admin-qr-section {
+            background: linear-gradient(135deg, #f0f7ff 0%, #e6f0ff 100%);
+            border: 1px solid #d1e0ff;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        }
+        
+        .admin-qr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .qr-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            border: 1px solid #eaeaea;
+        }
+        
+        .qr-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        
+        .qr-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .qr-card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        .qr-select-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .qr-type-selector {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        .qr-type-btn {
+            padding: 8px 15px;
+            border-radius: 6px;
+            background: #f0f4f8;
+            border: 1px solid #d1dbe4;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+        
+        .qr-type-btn.active {
+            background: var(--secondary);
+            color: white;
+            border-color: var(--secondary);
+        }
+        
         @media (max-width: 768px) {
             .header-content {
                 flex-direction: column;
@@ -912,6 +988,10 @@
                 right: 10px;
                 left: 10px;
                 font-size: 12px;
+            }
+            
+            .admin-qr-grid {
+                grid-template-columns: 1fr;
             }
         }
         
@@ -1225,6 +1305,59 @@
                     <button class="btn btn-success" id="refreshDataBtn">
                         <i class="fas fa-sync-alt"></i> 刷新数据
                     </button>
+                    <button class="btn btn-warning" id="showQRSectionBtn">
+                        <i class="fas fa-qrcode"></i> 二维码管理
+                    </button>
+                </div>
+                
+                <!-- 新增管理员二维码区域 -->
+                <div id="adminQRSection" class="admin-qr-section hidden">
+                    <h3 class="section-title"><i class="fas fa-qrcode"></i> 二维码管理</h3>
+                    
+                    <div class="qr-select-container">
+                        <div class="form-group">
+                            <label for="shopSelect">选择商家</label>
+                            <select id="shopSelect" class="shop-select">
+                                <option value="">-- 选择商家 --</option>
+                                <!-- 商家选项将通过JS动态加载 -->
+                            </select>
+                        </div>
+                        
+                        <div class="qr-type-selector">
+                            <button class="qr-type-btn active" data-type="management">管理二维码</button>
+                            <button class="qr-type-btn" data-type="public">公共二维码</button>
+                        </div>
+                    </div>
+                    
+                    <div class="admin-qr-grid">
+                        <div class="qr-card">
+                            <div class="qr-card-header">
+                                <i class="fas fa-user-cog"></i>
+                                <div class="qr-card-title">管理二维码</div>
+                            </div>
+                            <p>供授权人员扫码上传清洗记录</p>
+                            <div id="adminManagementQR" class="qr-img-container">
+                                <div class="qr-img" id="adminManagementQRImg"></div>
+                            </div>
+                            <button class="btn btn-primary" id="generateAdminManagementQRBtn">
+                                <i class="fas fa-sync-alt"></i> 重新生成
+                            </button>
+                        </div>
+                        
+                        <div class="qr-card">
+                            <div class="qr-card-header">
+                                <i class="fas fa-users"></i>
+                                <div class="qr-card-title">公共二维码</div>
+                            </div>
+                            <p>供公众扫码查看清洗记录</p>
+                            <div id="adminPublicQR" class="qr-img-container">
+                                <div class="qr-img" id="adminPublicQRImg"></div>
+                            </div>
+                            <button class="btn btn-success" id="generateAdminPublicQRBtn">
+                                <i class="fas fa-sync-alt"></i> 重新生成
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="tabs">
@@ -1387,6 +1520,7 @@
             cleanAlarm: 0,
             materialAlarm: 0
         };
+        let shops = []; // 存储所有商家列表
         
         // ======================
         // 辅助函数
@@ -1923,12 +2057,17 @@
             
             try {
                 // 加载商家列表（排除管理员账号）
-                const { data: shops, error: shopsError } = await serviceSupabase
+                const { data: shopsData, error: shopsError } = await serviceSupabase
                     .from('users')
                     .select('*')
                     .eq('is_admin', false);
                 
                 if (shopsError) throw shopsError;
+                
+                shops = shopsData;
+                
+                // 更新商家选择下拉菜单
+                updateShopSelect();
                 
                 // 加载所有清洗记录（排除管理员账号的数据）
                 const { data: cleanRecords, error: cleanError } = await serviceSupabase
@@ -2217,6 +2356,27 @@
                 showNotification(`删除商家失败: ${error.message}`, 'error');
             } finally {
                 hideNotification();
+            }
+        }
+        
+        // 更新商家选择下拉菜单
+        function updateShopSelect() {
+            const shopSelect = document.getElementById('shopSelect');
+            shopSelect.innerHTML = '<option value="">-- 选择商家 --</option>';
+            
+            shops.forEach(shop => {
+                const option = document.createElement('option');
+                option.value = shop.username;
+                option.textContent = shop.shop_name;
+                shopSelect.appendChild(option);
+            });
+            
+            // 添加一个"当前管理员"选项
+            if (currentUser && currentUser.is_admin) {
+                const option = document.createElement('option');
+                option.value = currentUser.username;
+                option.textContent = `${currentUser.shop_name} (管理员)`;
+                shopSelect.appendChild(option);
             }
         }
         
@@ -2538,6 +2698,70 @@
             }
         }
         
+        // 管理员生成管理二维码
+        function generateAdminManagementQR() {
+            const shopSelect = document.getElementById('shopSelect');
+            const selectedShop = shopSelect.value;
+            
+            if (!selectedShop) {
+                showNotification('请先选择商家', 'warning');
+                return;
+            }
+            
+            const container = document.getElementById('adminManagementQRImg');
+            container.innerHTML = '';
+            
+            // 创建动态URL
+            const url = `${window.location.origin}${window.location.pathname}?action=upload&shop=${selectedShop}`;
+            
+            try {
+                new QRCode(container, {
+                    text: url,
+                    width: 160,
+                    height: 160,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                showNotification('管理二维码已生成', 'success');
+            } catch (error) {
+                console.error('二维码生成失败:', error);
+                showNotification('二维码生成失败，请重试', 'error');
+            }
+        }
+        
+        // 管理员生成公共二维码
+        function generateAdminPublicQR() {
+            const shopSelect = document.getElementById('shopSelect');
+            const selectedShop = shopSelect.value;
+            
+            if (!selectedShop) {
+                showNotification('请先选择商家', 'warning');
+                return;
+            }
+            
+            const container = document.getElementById('adminPublicQRImg');
+            container.innerHTML = '';
+            
+            // 创建动态URL
+            const url = `${window.location.origin}${window.location.pathname}?view=public&shop=${selectedShop}`;
+            
+            try {
+                new QRCode(container, {
+                    text: url,
+                    width: 160,
+                    height: 160,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                showNotification('公共二维码已生成', 'success');
+            } catch (error) {
+                console.error('二维码生成失败:', error);
+                showNotification('二维码生成失败，请重试', 'error');
+            }
+        }
+        
         // ======================
         // 公共查看功能
         // ======================
@@ -2808,9 +3032,6 @@
             document.getElementById('cleanDate').value = today;
             document.getElementById('materialDate').value = today;
             
-            // 检查URL参数
-            checkURLParams();
-            
             // 绑定照片模态框关闭事件
             document.querySelector('.modal-close').addEventListener('click', function() {
                 document.getElementById('photoModal').style.display = 'none';
@@ -2823,8 +3044,42 @@
                 }
             });
             
+            // 管理员二维码功能
+            document.getElementById('showQRSectionBtn').addEventListener('click', function() {
+                const qrSection = document.getElementById('adminQRSection');
+                qrSection.classList.toggle('hidden');
+            });
+            
+            document.getElementById('generateAdminManagementQRBtn').addEventListener('click', generateAdminManagementQR);
+            document.getElementById('generateAdminPublicQRBtn').addEventListener('click', generateAdminPublicQR);
+            
+            // 二维码类型选择器
+            document.querySelectorAll('.qr-type-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const type = this.dataset.type;
+                    
+                    // 更新按钮状态
+                    document.querySelectorAll('.qr-type-btn').forEach(b => {
+                        b.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    
+                    // 显示对应的二维码
+                    if (type === 'management') {
+                        document.getElementById('adminManagementQR').style.display = 'block';
+                        document.getElementById('adminPublicQR').style.display = 'none';
+                    } else {
+                        document.getElementById('adminManagementQR').style.display = 'none';
+                        document.getElementById('adminPublicQR').style.display = 'block';
+                    }
+                });
+            });
+            
             // 初始化Supabase
             await initSupabase();
+            
+            // 检查URL参数（在初始化Supabase之后）
+            checkURLParams();
             
             // 监控数据库连接状态
             if (dbInitialized) {
