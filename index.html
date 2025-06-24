@@ -925,6 +925,54 @@
             border-color: var(--secondary);
         }
         
+        /* 修复二维码居中问题 */
+        .qr-img-container > div {
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        .qr-img-container canvas {
+            margin: 0 auto;
+        }
+        
+        /* 连接错误提示 */
+        .connection-error {
+            background: #fef0f0;
+            border: 1px solid #fcd0d0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .connection-error-title {
+            color: var(--danger);
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .connection-error-details {
+            font-size: 14px;
+            color: #666;
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .retry-btn {
+            margin-top: 15px;
+            width: 100%;
+        }
+
         @media (max-width: 768px) {
             .header-content {
                 flex-direction: column;
@@ -1082,6 +1130,20 @@
                     </div>
                     
                     <h2 class="section-title"><i class="fas fa-sign-in-alt"></i> 商家登录</h2>
+                    
+                    <!-- 连接错误提示区域 -->
+                    <div id="connectionError" class="connection-error hidden">
+                        <div class="connection-error-title">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>数据库连接失败</span>
+                        </div>
+                        <p>无法连接到Supabase数据库，请检查您的网络连接或联系管理员。</p>
+                        <div class="connection-error-details" id="errorDetails"></div>
+                        <button class="btn btn-primary retry-btn" id="retryConnectionBtn">
+                            <i class="fas fa-sync-alt"></i> 重试连接
+                        </button>
+                    </div>
+                    
                     <div class="form-group">
                         <label for="loginUsername">用户名</label>
                         <input type="text" id="loginUsername" placeholder="请输入用户名" autocomplete="username">
@@ -1469,9 +1531,9 @@
         <!-- 公共查看界面 -->
         <div id="publicView" class="hidden">
             <div class="public-container">
-                <button class="btn btn-warning" id="backToMainFromPublic" style="margin-bottom: 20px;">
-                    <i class="fas fa-arrow-left"></i> 返回主界面
-                </button>
+                <div id="publicViewBackBtn" style="margin-bottom: 20px;">
+                    <!-- 返回按钮将根据访问类型动态显示 -->
+                </div>
                 <div class="shop-info">
                     <h2 class="shop-name" id="publicShopName">餐饮店铺</h2>
                     <p class="shop-address" id="publicShopAddress">店铺地址</p>
@@ -1598,6 +1660,11 @@
                 // 更新状态为"正在连接"
                 document.getElementById('globalStatusIndicator').className = 'status-indicator status-connecting';
                 document.getElementById('globalStatusText').textContent = '正在连接数据库...';
+                document.getElementById('statusIndicator').className = 'status-indicator status-connecting';
+                document.getElementById('statusText').textContent = '正在连接...';
+                
+                // 隐藏错误信息
+                document.getElementById('connectionError').classList.add('hidden');
                 
                 // 初始化Supabase客户端
                 supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1619,7 +1686,9 @@
                     dbInitialized = false;
                     updateConnectionStatus(false);
                     updateGlobalConnectionStatus(false);
-                    showNotification('数据库连接失败，请检查网络连接', 'error');
+                    
+                    // 显示错误信息
+                    showConnectionError('数据库连接失败，请检查网络连接');
                     return false;
                 }
             } catch (error) {
@@ -1627,14 +1696,38 @@
                 dbInitialized = false;
                 updateConnectionStatus(false);
                 updateGlobalConnectionStatus(false);
-                showNotification('系统初始化失败，请刷新页面', 'error');
+                
+                // 显示详细的错误信息
+                showConnectionError(`系统初始化失败: ${error.message}`, error);
                 return false;
+            }
+        }
+        
+        // 显示连接错误
+        function showConnectionError(message, error = null) {
+            const errorContainer = document.getElementById('connectionError');
+            const errorDetails = document.getElementById('errorDetails');
+            
+            errorContainer.classList.remove('hidden');
+            
+            if (error) {
+                errorDetails.innerHTML = `
+                    <div><strong>错误信息:</strong> ${error.message}</div>
+                    <div><strong>错误代码:</strong> ${error.code || '无'}</div>
+                    <div><strong>错误详情:</strong> ${error.details || '无'}</div>
+                    <div><strong>错误位置:</strong> ${error.fileName || '无'}:${error.lineNumber || '无'}</div>
+                `;
+            } else {
+                errorDetails.textContent = '没有更多错误信息';
             }
         }
         
         // 测试数据库连接
         async function testDatabaseConnection() {
-            if (!serviceSupabase) return false;
+            if (!serviceSupabase) {
+                console.error('Supabase客户端未初始化');
+                return false;
+            }
             
             try {
                 // 设置超时
@@ -1642,9 +1735,10 @@
                     setTimeout(() => reject(new Error('连接超时')), 5000);
                 });
 
+                // 使用更简单的查询测试连接
                 const query = serviceSupabase
                     .from('users')
-                    .select('*')
+                    .select('id')
                     .limit(1);
 
                 // 等待查询或超时
@@ -1658,7 +1752,10 @@
         
         // 监控数据库连接状态
         async function monitorConnection() {
-            if (!dbInitialized) return;
+            if (!dbInitialized) {
+                console.log('数据库未初始化，跳过连接监控');
+                return;
+            }
             
             try {
                 const isConnected = await testDatabaseConnection();
@@ -2318,7 +2415,7 @@
                     return;
                 }
                 
-                showPublicView(shop.username);
+                showPublicView(shop.username, false);
             } catch (error) {
                 console.error('查看商家记录失败:', error);
                 showNotification(`查看商家记录失败: ${error.message}`, 'error');
@@ -2770,14 +2867,14 @@
             
             if (params.get('view') === 'public') {
                 const shop = params.get('shop');
-                showPublicView(shop);
+                showPublicView(shop, true);
             } else if (params.get('action') === 'upload') {
                 const shop = params.get('shop');
                 showUploadView(shop);
             }
         }
         
-        async function showPublicView(shopUsername) {
+        async function showPublicView(shopUsername, isPublicLink) {
             // 确保supabase已初始化
             if (!dbInitialized) {
                 showNotification('系统未初始化，请刷新页面', 'error');
@@ -2787,6 +2884,25 @@
             document.getElementById('authSection').classList.add('hidden');
             document.getElementById('mainSystem').classList.add('hidden');
             document.getElementById('publicView').classList.remove('hidden');
+            
+            // 设置返回按钮
+            const backBtnContainer = document.getElementById('publicViewBackBtn');
+            if (isPublicLink) {
+                // 如果是通过公共链接访问，不显示返回按钮
+                backBtnContainer.innerHTML = '';
+            } else {
+                // 如果是通过系统内部访问，显示返回按钮
+                backBtnContainer.innerHTML = `
+                    <button class="btn btn-warning" id="backToMainFromPublic">
+                        <i class="fas fa-arrow-left"></i> 返回主界面
+                    </button>
+                `;
+                // 添加事件监听器
+                document.getElementById('backToMainFromPublic').addEventListener('click', function() {
+                    document.getElementById('publicView').classList.add('hidden');
+                    document.getElementById('mainSystem').classList.remove('hidden');
+                });
+            }
             
             // 显示加载通知
             showNotification('正在加载公开数据...', 'info', 0);
@@ -2987,10 +3103,7 @@
             document.getElementById('generatePublicQRBtn').addEventListener('click', generatePublicQR);
             document.getElementById('cleanForm').addEventListener('submit', submitCleanRecord);
             document.getElementById('materialForm').addEventListener('submit', submitMaterialRecord);
-            document.getElementById('backToMainFromPublic').addEventListener('click', function() {
-                document.getElementById('publicView').classList.add('hidden');
-                document.getElementById('mainSystem').classList.remove('hidden');
-            });
+            document.getElementById('retryConnectionBtn').addEventListener('click', initSupabase);
             
             // 照片预览
             document.getElementById('cleanPhoto').addEventListener('change', previewPhoto);
